@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Caja · Club Bin Xiang</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#E0161C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Caja BX">
+<link rel="apple-touch-icon" href="club-logo.png">
+<link rel="icon" href="club-logo.png">
+<link rel="stylesheet" href="club.css">
+</head>
+<body>
+<div class="wrap">
+  <img class="logo" src="club-banner.png" alt="Restaurant Bin-Xiang" style="max-width:190px">
+  <div class="msg" id="msg"></div>
+
+  <!-- PIN -->
+  <form class="card hide" id="vPin">
+    <h2>Caja · Club Bin Xiang</h2>
+    <label for="pin">PIN de caja</label>
+    <input type="password" id="pin" inputmode="numeric" autocomplete="off" maxlength="12">
+    <button class="btn" type="submit">Entrar</button>
+    <p class="muted">El PIN está en la hoja “Config” de la planilla.</p>
+  </form>
+
+  <!-- INICIO -->
+  <div class="hide" id="vInicio">
+    <button class="btn" id="bScan" type="button" style="padding:22px;font-size:1.25rem">📷 Escanear tarjeta</button>
+    <div class="card" style="margin-top:14px">
+      <label for="q" style="margin-top:0">Buscar por nombre, celular o número</label>
+      <input type="search" id="q" placeholder="Ej: Juan · 91234 · 12" autocomplete="off">
+      <div id="res"></div>
+    </div>
+    <button class="btn sec" id="bNuevo" type="button">＋ Nuevo cliente</button>
+    <button class="btn sec mini" id="bSalir" type="button" style="border-color:#bbb;color:#666;margin-top:26px">Cerrar sesión de caja</button>
+  </div>
+
+  <!-- NUEVO -->
+  <form class="card hide" id="vNuevo">
+    <h2>Nuevo cliente</h2>
+    <label for="nNombre">Nombre y apellido</label>
+    <input type="text" id="nNombre" maxlength="60" autocomplete="off">
+    <label for="nTel">Celular</label>
+    <input type="tel" id="nTel" inputmode="tel" placeholder="9 1234 5678" maxlength="20" autocomplete="off">
+    <label for="nCumple">Cumpleaños <small>(opcional, día/mes)</small></label>
+    <input type="text" id="nCumple" inputmode="numeric" placeholder="15/08" maxlength="5" autocomplete="off">
+    <p class="muted">Avísale que guardaremos su nombre y celular para su tarjeta y beneficios.</p>
+    <button class="btn" type="submit" id="nGo">Crear tarjeta</button>
+    <button class="btn sec mini" type="button" data-volver>Cancelar</button>
+  </form>
+
+  <!-- CLIENTE -->
+  <div class="hide" id="vCliente">
+    <div class="card">
+      <div class="muted" id="cId"></div>
+      <div class="big" id="cNombre"></div>
+      <div class="dots" id="cDots"></div>
+      <div class="muted" id="cInfo"></div>
+      <div class="gratis hide" id="cGratis"></div>
+    </div>
+    <div class="card">
+      <label for="monto" style="margin-top:0">Monto de la compra <small>(opcional)</small></label>
+      <input type="text" id="monto" inputmode="numeric" placeholder="$" autocomplete="off">
+      <label>¿Qué pidió? <small>(opcional)</small></label>
+      <div class="chips" id="chPedido"></div>
+      <label>Medio de pago <small>(opcional)</small></label>
+      <div class="chips" id="chPago"></div>
+      <button class="btn verde" id="bTimbre" type="button" style="padding:20px;font-size:1.2rem">✓ Sumar 1 timbre</button>
+      <div class="hide" id="zCanje">
+        <label>🎁 Canjear premio por:</label>
+        <div id="canjes"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Entregar la tarjeta al cliente</h2>
+      <div class="row">
+        <button class="btn sec mini" id="bQr" type="button">Mostrar QR</button>
+        <a class="btn sec mini" id="bWsp" target="_blank" rel="noopener" href="#">Enviar WhatsApp</a>
+      </div>
+      <div class="qr hide" id="cQr"></div>
+      <p class="muted center hide" id="cQrTxt">El cliente escanea este código con su cámara y guarda su tarjeta.</p>
+    </div>
+    <div class="card hide" id="cUlt"><h2>Últimas visitas</h2><div id="cUltList" class="muted"></div></div>
+    <button class="btn negro" type="button" data-volver>Listo · siguiente cliente</button>
+  </div>
+</div>
+
+<!-- ESCÁNER -->
+<div id="scan" class="hide">
+  <video id="video" playsinline muted></video>
+  <div class="bar">
+    <div id="scanTxt">Apunta al código QR de la tarjeta</div>
+    <button class="btn sec" id="bCerrarScan" type="button">Cancelar</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js" integrity="sha384-b5Ya4Bq3qCyz39m2ISh+4DxjAIljdeFwK/BsXLuj9gugaNwAcj/ia15fxNZL9Nlx" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js" integrity="sha384-e9EFD6BGC90bkW9aDV5xbbBfzwN7G8YImHao2lfLVKV/hPB0E0go+H3I64h7oHtA" crossorigin="anonymous"></script>
+<script src="club-config.js"></script>
+<script>
+(function () {
+  const $ = function (id) { return document.getElementById(id); };
+  const vistas = ['vPin', 'vInicio', 'vNuevo', 'vCliente'];
+  let pin = '', actual = null, pedido = '', pago = '', ocupado = false;
+  try { pin = sessionStorage.getItem('bx_pin') || localStorage.getItem('bx_pin') || ''; } catch (e) {}
+  let pendiente = new URLSearchParams(location.search).get('s');
+
+  function ver(v) { vistas.forEach(function (x) { $(x).classList.toggle('hide', x !== v); }); window.scrollTo(0, 0); }
+  function aviso(clase, texto) { const m = $('msg'); m.className = 'msg ' + (clase || ''); m.textContent = texto || ''; }
+  function limpiarUrl() { if (location.search) history.replaceState(null, '', location.pathname); }
+
+  async function api(accion, datos) {
+    let r;
+    try { r = await clubApi(accion, Object.assign({ pin: pin }, datos || {})); }
+    catch (e) { throw new Error(e.message === 'Failed to fetch' ? 'Sin conexión. Revisa el internet del teléfono.' : e.message); }
+    if (!r.ok && r.codigo === 'pin') { salir(); throw new Error('PIN incorrecto. Ingrésalo de nuevo.'); }
+    return r;
+  }
+  function salir() {
+    pin = ''; try { localStorage.removeItem('bx_pin'); sessionStorage.removeItem('bx_pin'); } catch (e) {}
+    ver('vPin');
+  }
+
+  /* ---------- PIN ---------- */
+  $('vPin').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    pin = $('pin').value.trim();
+    if (!pin) return;
+    aviso();
+    try {
+      const r = await api('entrar');
+      if (!r.ok) throw new Error(r.error);
+      try { localStorage.setItem('bx_pin', pin); } catch (e) {}
+      $('pin').value = '';
+      iniciar();
+    } catch (e) { aviso('err', e.message); }
+  });
+  $('bSalir').addEventListener('click', salir);
+
+  function iniciar() {
+    if (pendiente) { const s = pendiente; pendiente = null; limpiarUrl(); abrir(s); }
+    else ver('vInicio');
+  }
+
+  /* ---------- chips ---------- */
+  function chips(el, lista, set) {
+    el.textContent = '';
+    lista.forEach(function (t) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'chip'; b.textContent = t;
+      b.addEventListener('click', function () {
+        const ya = b.classList.contains('on');
+        Array.prototype.forEach.call(el.children, function (c) { c.classList.remove('on'); });
+        if (!ya) b.classList.add('on');
+        set(ya ? '' : t);
+      });
+      el.appendChild(b);
+    });
+  }
+
+  /* ---------- cliente ---------- */
+  function pintar(c, ultimas) {
+    actual = c; pedido = ''; pago = '';
+    $('cId').textContent = c.id + (c.telefono ? ' · +' + c.telefono : '');
+    $('cNombre').textContent = c.nombre;
+    clubDots($('cDots'), c.timbres, c.meta);
+    $('cInfo').textContent = c.timbres + '/' + c.meta + ' timbres · ' + c.visitas + ' visitas' +
+      (c.gasto_total ? ' · $' + Number(c.gasto_total).toLocaleString('es-CL') + ' acumulado' : '') +
+      (c.ultima_visita ? ' · última: ' + c.ultima_visita : '');
+    const g = $('cGratis');
+    g.classList.toggle('hide', c.gratis < 1);
+    g.textContent = '🎁 Tiene ' + c.gratis + (c.gratis > 1 ? ' colaciones' : ' colación') + ' GRATIS disponible' + (c.gratis > 1 ? 's' : '');
+    $('zCanje').classList.toggle('hide', c.gratis < 1);
+    $('monto').value = '';
+    chips($('chPedido'), CLUB.PEDIDOS, function (v) { pedido = v; });
+    chips($('chPago'), CLUB.PAGOS, function (v) { pago = v; });
+    $('cQr').classList.add('hide'); $('cQrTxt').classList.add('hide');
+    const texto = '¡Hola ' + c.nombre.split(' ')[0] + '! Esta es tu tarjeta del Club Bin Xiang 🥢 Junta ' + c.meta +
+      ' colaciones y la siguiente es gratis: ' + c.url;
+    $('bWsp').href = 'https://wa.me/' + encodeURIComponent(c.telefono) + '?text=' + encodeURIComponent(texto);
+    if (ultimas) {
+      $('cUlt').classList.toggle('hide', !ultimas.length);
+      const l = $('cUltList'); l.textContent = '';
+      ultimas.forEach(function (u) {
+        const d = document.createElement('div');
+        d.textContent = u.fecha + ' · ' + (u.tipo === 'CANJE' ? 'Canje gratis' : 'Timbre') +
+          (u.monto ? ' · $' + Number(u.monto).toLocaleString('es-CL') : '') + (u.pedido ? ' · ' + u.pedido : '');
+        l.appendChild(d);
+      });
+    }
+    ver('vCliente');
+  }
+
+  async function abrir(s) {
+    aviso('warn', 'Buscando cliente…');
+    try {
+      const r = await api('cliente', { s: s });
+      if (!r.ok) { aviso('err', r.error); ver('vInicio'); return; }
+      aviso();
+      pintar(r.cliente, r.ultimas);
+    } catch (e) { aviso('err', e.message); if (pin) ver('vInicio'); }
+  }
+
+  $('monto').addEventListener('input', function () {
+    const d = this.value.replace(/\D/g, '').slice(0, 7);
+    this.value = d ? '$' + Number(d).toLocaleString('es-CL') : '';
+  });
+
+  async function mover(accion, extra) {
+    if (ocupado || !actual) return;
+    ocupado = true; $('bTimbre').disabled = true;
+    aviso('warn', 'Guardando…');
+    try {
+      const base = { s: actual.id, pedido: pedido, pago: pago, monto: $('monto').value };
+      let r = await api(accion, Object.assign({}, base, extra || {}));
+      if (!r.ok && r.codigo === 'doble') {
+        if (!window.confirm(r.error)) { aviso(); return; }
+        r = await api(accion, Object.assign({}, base, extra || {}, { forzar: true }));
+      }
+      if (!r.ok) { aviso('err', r.error); return; }
+      const c = r.cliente;
+      pintar(c, null);
+      let t = accion === 'canje'
+        ? '✓ Premio canjeado' + (extra && extra.pedido ? ' (' + extra.pedido + ')' : '') + '. Le quedan ' + c.gratis + ' gratis.'
+        : (r.gano ? '🎉 ¡Completó ' + c.meta + ' timbres! Ganó 1 colación GRATIS para su próxima visita.' : '✓ Timbre sumado: ' + c.timbres + '/' + c.meta);
+      if (r.wallet && !r.wallet.ok) t += ' (Guardado en la planilla; Google Wallet no se actualizó: ' + r.wallet.error + ')';
+      aviso(r.wallet && !r.wallet.ok ? 'warn' : 'ok', t);
+    } catch (e) { aviso('err', e.message); }
+    finally { ocupado = false; $('bTimbre').disabled = false; }
+  }
+  $('bTimbre').addEventListener('click', function () { mover('timbre'); });
+  (CLUB.CANJES || ['Colación']).forEach(function (op) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn mini'; b.textContent = op; b.setAttribute('data-canje', op);
+    b.addEventListener('click', function () {
+      if (window.confirm('¿Canjear el premio de ' + actual.nombre + ' por: ' + op + '?')) mover('canje', { pedido: op });
+    });
+    $('canjes').appendChild(b);
+  });
+  $('bQr').addEventListener('click', function () {
+    clubQr($('cQr'), actual.url, 250);
+    $('cQr').classList.remove('hide'); $('cQrTxt').classList.remove('hide');
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-volver]'), function (b) {
+    b.addEventListener('click', function () { actual = null; aviso(); $('q').value = ''; $('res').textContent = ''; ver('vInicio'); });
+  });
+
+  /* ---------- buscar ---------- */
+  let tBuscar = null, nBuscar = 0;
+  $('q').addEventListener('input', function () {
+    clearTimeout(tBuscar);
+    const q = this.value.trim();
+    if (q.length < 2) { $('res').textContent = ''; return; }
+    tBuscar = setTimeout(async function () {
+      const n = ++nBuscar;
+      try {
+        const r = await api('buscar', { q: q });
+        if (n !== nBuscar) return;
+        const el = $('res'); el.textContent = '';
+        if (!r.clientes || !r.clientes.length) { el.textContent = 'Sin resultados.'; el.className = 'muted'; return; }
+        el.className = '';
+        r.clientes.forEach(function (c) {
+          const d = document.createElement('div'); d.className = 'item';
+          const a = document.createElement('span'); a.textContent = c.nombre;
+          const b = document.createElement('span'); b.className = 'muted'; b.textContent = c.id + ' · ' + c.timbres + '/' + c.meta;
+          d.appendChild(a); d.appendChild(b);
+          d.addEventListener('click', function () { abrir(c.id); });
+          el.appendChild(d);
+        });
+      } catch (e) { aviso('err', e.message); }
+    }, 450);
+  });
+
+  /* ---------- nuevo ---------- */
+  $('bNuevo').addEventListener('click', function () { aviso(); $('vNuevo').reset(); ver('vNuevo'); });
+  $('nCumple').addEventListener('input', function () {
+    const d = this.value.replace(/\D/g, '').slice(0, 4);
+    this.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+  });
+  $('vNuevo').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    if (ocupado) return;
+    ocupado = true; $('nGo').disabled = true; aviso('warn', 'Creando tarjeta…');
+    try {
+      const r = await api('alta', { nombre: $('nNombre').value, telefono: $('nTel').value, cumple: $('nCumple').value });
+      if (!r.ok) { aviso('err', r.error); return; }
+      pintar(r.cliente, []);
+      aviso(r.existente ? 'warn' : 'ok', r.existente ? 'Ese celular ya tenía tarjeta: es esta.' : '✓ Tarjeta creada. Entrégasela con el QR o por WhatsApp y súmale su timbre de hoy.');
+      $('bQr').click();
+    } catch (e) { aviso('err', e.message); }
+    finally { ocupado = false; $('nGo').disabled = false; }
+  });
+
+  /* ---------- escáner ---------- */
+  let stream = null, raf = 0, detector = null;
+  const canvas = document.createElement('canvas');
+  function idDe(texto) {
+    texto = String(texto || '').trim();
+    const m = texto.match(/[?&]s=(BX-?\d+)/i) || texto.match(/^(BX-?\d+)$/i);
+    return m ? m[1].toUpperCase() : null;
+  }
+  async function escanear() {
+    aviso();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return aviso('err', 'Este navegador no permite usar la cámara. Usa la búsqueda.');
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+    } catch (e) { return aviso('err', 'No se pudo abrir la cámara. Dale permiso de cámara a esta página, o usa la búsqueda.'); }
+    const v = $('video');
+    v.srcObject = stream; await v.play().catch(function () {});
+    $('scan').classList.remove('hide');
+    $('scanTxt').textContent = 'Apunta al código QR de la tarjeta';
+    if ('BarcodeDetector' in window) { try { detector = new BarcodeDetector({ formats: ['qr_code'] }); } catch (e) { detector = null; } }
+    let ultimo = 0;
+    const paso = async function (ts) {
+      if (!stream) return;
+      raf = requestAnimationFrame(paso);
+      if (ts - ultimo < 140 || v.readyState < 2 || !v.videoWidth) return;
+      ultimo = ts;
+      let texto = null;
+      try {
+        if (detector) { const c = await detector.detect(v); if (c.length) texto = c[0].rawValue; }
+        if (!texto && window.jsQR) {
+          const esc = Math.min(1, 720 / v.videoWidth);
+          canvas.width = Math.round(v.videoWidth * esc); canvas.height = Math.round(v.videoHeight * esc);
+          const x = canvas.getContext('2d', { willReadFrequently: true });
+          x.drawImage(v, 0, 0, canvas.width, canvas.height);
+          const d = x.getImageData(0, 0, canvas.width, canvas.height);
+          const q = jsQR(d.data, d.width, d.height, { inversionAttempts: 'dontInvert' });
+          if (q) texto = q.data;
+        }
+      } catch (e) { detector = null; }
+      if (!texto || !stream) return;
+      const id = idDe(texto);
+      if (id) { cerrarScan(); if (navigator.vibrate) navigator.vibrate(80); abrir(id); }
+      else $('scanTxt').textContent = 'Ese código no es una tarjeta del Club Bin Xiang';
+    };
+    raf = requestAnimationFrame(paso);
+  }
+  function cerrarScan() {
+    cancelAnimationFrame(raf);
+    if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+    stream = null; $('video').srcObject = null;
+    $('scan').classList.add('hide');
+  }
+  $('bScan').addEventListener('click', escanear);
+  $('bCerrarScan').addEventListener('click', cerrarScan);
+  window.__bxScan = function (t) { const id = idDe(t); if (id) abrir(id); return id; }; // usado por las pruebas
+
+  /* ---------- arranque ---------- */
+  if (!pin) ver('vPin');
+  else api('entrar').then(function (r) { if (r.ok) iniciar(); }).catch(function (e) { aviso('err', e.message); if (pin) ver('vInicio'); });
+})();
+</script>
+</body>
+</html>

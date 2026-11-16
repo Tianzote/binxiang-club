@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Club Bin Xiang · Tu colación n°10 es gratis</title>
+<meta name="description" content="Inscríbete al Club Bin Xiang: cada 9 colaciones, la 10ª es gratis.">
+<meta name="theme-color" content="#E0161C">
+<link rel="icon" href="club-logo.png">
+<link rel="stylesheet" href="club.css">
+</head>
+<body>
+<div class="wrap">
+  <img class="logo" src="club-banner.png" alt="Restaurant Bin-Xiang">
+  <h1>Club Bin Xiang</h1>
+  <p class="sub">Junta 9 colaciones y la 10ª es <b>gratis</b>.</p>
+
+  <div class="card hide" id="ya">
+    <p class="center" style="margin:0 0 4px">Ya tienes tu tarjeta en este celular.</p>
+    <a class="btn" id="yaLink" href="#">Ver mi tarjeta</a>
+  </div>
+
+  <form class="card" id="f" novalidate>
+    <h2>Inscríbete en 20 segundos</h2>
+    <label for="nombre">Nombre y apellido</label>
+    <input type="text" id="nombre" autocomplete="name" maxlength="60" required>
+    <label for="tel">Celular</label>
+    <input type="tel" id="tel" autocomplete="tel" inputmode="tel" placeholder="9 1234 5678" maxlength="20" required>
+    <label for="cumple">Cumpleaños <small>(opcional, día/mes — para regalonearte)</small></label>
+    <input type="text" id="cumple" inputmode="numeric" placeholder="15/08" maxlength="5">
+    <label class="check"><input type="checkbox" id="acepta">
+      <span>Acepto que Restaurant Bin-Xiang guarde mi nombre, celular y visitas para administrar mi tarjeta y enviarme beneficios por WhatsApp. Puedo pedir que borren mis datos cuando quiera.</span></label>
+    <div class="msg" id="msg"></div>
+    <button class="btn" id="go" type="submit">Crear mi tarjeta</button>
+  </form>
+  <p class="center muted" style="margin-bottom:10px"><b>Condiciones:</b> cada colación suma 1 timbre. Si no quieres una colación, puedes cambiar tu premio por 3 porciones de arrollado primavera o 4 porciones de wantán.</p>
+  <p class="center muted">Antonio Varas 67, Providencia · 23 años cocinando en familia</p>
+</div>
+<script src="club-config.js"></script>
+<script>
+(function () {
+  const $ = function (id) { return document.getElementById(id); };
+  let guardado = null;
+  try { guardado = localStorage.getItem('bx_token'); } catch (e) {}
+  if (guardado && /^[a-f0-9]{16}$/.test(guardado)) {
+    $('ya').classList.remove('hide');
+    $('yaLink').href = 'tarjeta.html?t=' + guardado;
+  }
+  $('cumple').addEventListener('input', function () {
+    const d = this.value.replace(/\D/g, '').slice(0, 4);
+    this.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+  });
+  function error(t) { const m = $('msg'); m.className = 'msg err'; m.textContent = t; }
+  $('f').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const nombre = $('nombre').value.trim(), tel = $('tel').value.trim();
+    if (nombre.length < 2) return error('Escribe tu nombre.');
+    if (tel.replace(/\D/g, '').length < 9) return error('Escribe tu celular (9 dígitos).');
+    if (!$('acepta').checked) return error('Marca la casilla para aceptar el uso de tus datos.');
+    const b = $('go');
+    b.disabled = true; b.textContent = 'Creando tu tarjeta…'; $('msg').className = 'msg';
+    try {
+      const r = await clubApi('registro', { nombre: nombre, telefono: tel, cumple: $('cumple').value, acepta: true });
+      if (!r.ok) throw new Error(r.error || 'No se pudo crear la tarjeta.');
+      try { localStorage.setItem('bx_token', r.token); } catch (e) {}
+      location.href = 'tarjeta.html?t=' + r.token + '&nueva=1';
+    } catch (e) {
+      error(e.message === 'Failed to fetch' ? 'Sin conexión. Revisa tu internet e intenta de nuevo.' : e.message);
+      b.disabled = false; b.textContent = 'Crear mi tarjeta';
+    }
+  });
+})();
+</script>
+</body>
+</html>

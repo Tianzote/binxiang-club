@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mi tarjeta · Club Bin Xiang</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#E0161C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Bin Xiang">
+<link rel="apple-touch-icon" href="club-logo.png">
+<link rel="icon" href="club-logo.png">
+<link rel="stylesheet" href="club.css">
+</head>
+<body>
+<div class="wrap">
+  <img class="logo" src="club-banner.png" alt="Restaurant Bin-Xiang">
+  <div class="msg" id="msg"></div>
+
+  <div class="card hide" id="t">
+    <div class="center muted">Club Bin Xiang · <span id="id"></span></div>
+    <h1 id="hola"></h1>
+    <div class="dots" id="dots"></div>
+    <p class="center" id="falta" style="margin:6px 0 0"></p>
+    <div class="gratis hide" id="gratis"></div>
+    <div class="qr" id="qr"></div>
+    <p class="center muted" style="margin:4px 0 0">Muestra este código en caja antes de pagar</p>
+    <a class="btn negro hide" id="wallet" href="#" rel="noopener">Agregar a Google Wallet</a>
+    <p class="center muted hide" id="ios">iPhone: toca <b>Compartir</b> → <b>Agregar a pantalla de inicio</b> para tener tu tarjeta a mano.</p>
+    <button class="btn sec mini" id="refrescar" type="button">Actualizar mis timbres</button>
+    <p class="center muted" id="cond" style="margin:12px 0 0"></p>
+  </div>
+
+  <div class="card links hide" id="links">
+    <a href="https://tianzote.github.io/binxiang-carta/">📖 Ver la carta (ES / EN / PT / 中文)</a>
+    <a href="https://wa.me/56997764557">💬 Pedir por WhatsApp</a>
+    <a href="https://www.instagram.com/binxiang67">📷 Instagram @binxiang67</a>
+    <a href="https://www.google.com/maps/search/?api=1&query=Antonio+Varas+67+Providencia+Santiago">📍 Antonio Varas 67, Providencia</a>
+  </div>
+  <a class="btn sec hide" id="inscribir" href="club.html">Inscribirme al Club</a>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js" integrity="sha384-e9EFD6BGC90bkW9aDV5xbbBfzwN7G8YImHao2lfLVKV/hPB0E0go+H3I64h7oHtA" crossorigin="anonymous"></script>
+<script src="club-config.js"></script>
+<script>
+(function () {
+  const $ = function (id) { return document.getElementById(id); };
+  const par = new URLSearchParams(location.search);
+  let token = par.get('t');
+  if (!token) { try { token = localStorage.getItem('bx_token'); } catch (e) {} }
+  const nueva = par.get('nueva') === '1';
+  function aviso(clase, texto) { const m = $('msg'); m.className = 'msg ' + clase; m.textContent = texto; }
+
+  async function cargar() {
+    if (!token || !/^[a-f0-9]{16}$/.test(token)) {
+      aviso('warn', 'No encontramos tu tarjeta en este celular.');
+      $('inscribir').classList.remove('hide');
+      return;
+    }
+    $('refrescar').disabled = true;
+    try {
+      const r = await clubApi('tarjeta', { t: token });
+      if (!r.ok) { aviso('err', r.error || 'Tarjeta no encontrada.'); $('inscribir').classList.remove('hide'); return; }
+      try { localStorage.setItem('bx_token', token); } catch (e) {}
+      const c = r.tarjeta;
+      $('id').textContent = c.id;
+      $('hola').textContent = 'Hola, ' + c.nombre;
+      clubDots($('dots'), c.timbres, c.meta);
+      const f = c.meta - c.timbres;
+      $('falta').textContent = 'Llevas ' + c.timbres + ' de ' + c.meta + '. ' + (f === 1 ? 'Te falta 1 para tu colación gratis.' : 'Te faltan ' + f + ' para tu colación gratis.');
+      const g = $('gratis');
+      g.classList.toggle('hide', c.gratis < 1);
+      g.textContent = '🎉 ¡Tienes ' + c.gratis + (c.gratis > 1 ? ' colaciones' : ' colación') + ' GRATIS! Avisa en caja.';
+      $('cond').textContent = 'Condiciones: cada colación suma 1 timbre; con ' + c.meta + ' timbres, la siguiente es gratis.' + (c.canje_alternativo ? ' Si no quieres una colación, puedes cambiar tu premio por ' + c.canje_alternativo + '.' : '');
+      clubQr($('qr'), c.qr, 230);
+      const esIos = /iPhone|iPad|iPod/.test(navigator.userAgent);
+      if (r.wallet && !esIos) { $('wallet').href = r.wallet; $('wallet').classList.remove('hide'); }
+      $('ios').classList.toggle('hide', !esIos);
+      $('t').classList.remove('hide');
+      $('links').classList.remove('hide');
+      if (nueva) aviso('ok', '¡Listo! Esta es tu tarjeta. ' + (esIos ? 'Guárdala en tu pantalla de inicio.' : (r.wallet ? 'Guárdala en Google Wallet con el botón negro.' : 'Guarda esta página en tus favoritos.')));
+      else $('msg').className = 'msg';
+    } catch (e) {
+      aviso('err', e.message === 'Failed to fetch' ? 'Sin conexión. Revisa tu internet.' : e.message);
+    } finally {
+      $('refrescar').disabled = false;
+    }
+  }
+  $('refrescar').addEventListener('click', cargar);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && !$('t').classList.contains('hide')) cargar(); });
+  cargar();
+})();
+</script>
+</body>
+</html>
